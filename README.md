@@ -16,6 +16,7 @@ Semantic search over video footage. Type what you're looking for, get a trimmed 
   - [Search](#search)
   - [Search by image](#search-by-image)
   - [Highlights](#highlights)
+  - [Qwen Cloud (Alibaba DashScope)](#qwen-cloud-alibaba-dashscope)
   - [Local Backend (no API key needed)](#local-backend-no-api-key-needed)
   - [Why the local model is fast](#why-the-local-model-is-fast)
   - [Tesla Metadata Overlay](#tesla-metadata-overlay)
@@ -31,7 +32,7 @@ Semantic search over video footage. Type what you're looking for, get a trimmed 
 
 ## How it works
 
-SentrySearch splits your videos into overlapping chunks, embeds each chunk as video using either Google's Gemini Embedding API or a local Qwen3-VL model, and stores the vectors in a local ChromaDB database. When you search, your text query (or image, see [search by image](#search-by-image)) is embedded into the same vector space and matched against the stored video embeddings. The top match is automatically trimmed from the original file and saved as a clip.
+SentrySearch splits your videos into overlapping chunks, embeds each chunk as video using Google's Gemini Embedding API, Alibaba DashScope (**qwen-cloud**), or a local Qwen3-VL model, and stores the vectors in a local ChromaDB database. When you search, your text query (or image, see [search by image](#search-by-image)) is embedded into the same vector space and matched against the stored video embeddings. The top match is automatically trimmed from the original file and saved as a clip.
 
 ## Getting Started
 
@@ -188,6 +189,19 @@ Refinement options:
 - `--no-trim` — print the ranking without writing clips.
 
 > **Caveat:** Statistically anomalous ≠ interesting. Sensor glitches, lens flare, night frames in a mostly-daytime index, and the lone garage clip all rank high. Use `--exclude-baseline` and `--dedupe` to filter the noise, or `--against` to constrain by topic.
+
+### Qwen Cloud (Alibaba DashScope)
+
+Use the optional **qwen-cloud** backend for [DashScope](https://help.aliyun.com/dashscope/) / Model Studio multimodal embeddings (default model `qwen3-vl-embedding`, overridable with `--dashscope-model` or `DASHSCOPE_EMBEDDING_MODEL`):
+
+```bash
+uv tool install ".[qwen-cloud]"
+export DASHSCOPE_API_KEY=...
+sentrysearch index /path/to/footage --backend qwen-cloud
+sentrysearch search "your query" --backend qwen-cloud
+```
+
+**Video uploads:** local chunk files are sent to **DashScope-managed temporary OSS by the official Python SDK** before the API consumes them (the HTTP API expects a URL; the SDK handles upload for you).
 
 ### Local Backend (no API key needed)
 
