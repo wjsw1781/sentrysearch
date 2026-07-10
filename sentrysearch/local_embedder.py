@@ -88,10 +88,35 @@ class LocalEmbedder(BaseEmbedder):
         quantize: bool | None = None,
     ):
         self._model_name = MODEL_ALIASES.get(model_name, model_name)
+        # If the model name was sanitized by normalize_model_key (e.g.
+        # "huihui_ai_huihui_qwen3_vl_2b_instruct_abliterated"), try to
+        # restore the original HuggingFace repo_id by checking the cache.
+        if self._model_name not in MODEL_ALIASES and "/" not in self._model_name:
+            restored = self._resolve_cached_model_id(self._model_name)
+            if restored:
+                self._model_name = restored
         self._dimensions = dimensions
         self._quantize = quantize  # None = auto-detect
         self._model = None
         self._processor = None
+
+    @staticmethod
+    def _resolve_cached_model_id(sanitized: str) -> str | None:
+        """Try to find a cached HF model whose sanitized name matches."""
+        try:
+            import glob
+            cache_dir = os.path.expanduser(
+                os.environ.get("HF_HOME", "~/.cache/huggingface")
+            )
+            hub_dir = os.path.join(cache_dir, "hub")
+            for model_dir in glob.glob(os.path.join(hub_dir, "models--*")):
+                # models--org--name → org/name
+                repo_id = model_dir.split("models--", 1)[1].replace("--", "/", 1)
+                if repo_id.replace("/", "_").replace("-", "_").lower() == sanitized:
+                    return repo_id
+        except Exception:
+            pass
+        return None
 
     def _load_model(self):
         if self._model is not None:
@@ -228,6 +253,13 @@ class LocalEmbedder(BaseEmbedder):
                     cache_position=cache_position,
                     **kwargs,
                 )
+
+        # If the model is fully cached, skip all network access to avoid
+        # slow/failed remote metadata checks (especially for community models
+        # like huihui-ai/* that trigger unauthenticated HF Hub requests).
+        if is_cached:
+            os.environ.setdefault("HF_HUB_OFFLINE", "1")
+            os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
         try:
             self._processor = Qwen3VLProcessor.from_pretrained(
